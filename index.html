@@ -5,99 +5,211 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>2D Minecraft</title>
     <style>
-        body { margin: 0; background: #87CEEB; font-family: monospace; }
-        canvas { border: 2px solid #333; display: block; margin: 0 auto; image-rendering: pixelated; }
-        #info { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.7); padding: 10px; }
+        body { 
+            margin: 0; 
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 70%, #E0F6FF 100%); 
+            font-family: 'Courier New', monospace; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding: 20px;
+        }
+        canvas { 
+            border: 3px solid #4A5D23; 
+            background: #000;
+            image-rendering: pixelated;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #info { 
+            color: #333; 
+            background: rgba(255,255,255,0.9); 
+            padding: 15px; 
+            border-radius: 10px; 
+            margin-bottom: 10px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body>
-    <canvas id="game" width="800" height="600"></canvas>
     <div id="info">
-        WASD: движение | ЛКМ: блок | ПКМ: копать | Блоки: земля/воздух
+        <h3>🟫 2D Minecraft</h3>
+        WASD / Стрелки: движение | ЛКМ: поставить землю | ПКМ: копать | R: перегенерация мира
     </div>
+    <canvas id="game" width="1000" height="600"></canvas>
+    
     <script>
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = false;
 
-        // Размер блока и мир
+        // Константы
         const BLOCK_SIZE = 32;
-        const WORLD_WIDTH = 50;
-        const WORLD_HEIGHT = 30;
-        const world = [];
-
-        // Инициализация мира (земля снизу, небо сверху)
-        for (let x = 0; x < WORLD_WIDTH; x++) {
-            world[x] = [];
-            for (let y = 0; y < WORLD_HEIGHT; y++) {
-                world[x][y] = y > WORLD_HEIGHT - 8 ? 1 : 0; // 1=земля, 0=воздух
-            }
-        }
+        const WORLD_WIDTH = 200;
+        const WORLD_HEIGHT = 50;
+        let world = [];
+        let camera = { x: 0, y: 0 };
 
         // Игрок
-        const player = { x: 25 * BLOCK_SIZE, y: 10 * BLOCK_SIZE, width: BLOCK_SIZE, height: BLOCK_SIZE * 2, speed: 3 };
+        const player = { 
+            x: 100 * BLOCK_SIZE, 
+            y: 20 * BLOCK_SIZE, 
+            width: BLOCK_SIZE * 1.5, 
+            height: BLOCK_SIZE * 2, 
+            speed: 4,
+            velY: 0,
+            grounded: false
+        };
 
         // Клавиши
         const keys = {};
-        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key.toLowerCase() === 'r') generateWorld();
+        });
         window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
         // Мышь
-        canvas.addEventListener('click', e => {
-            const rect = canvas.getBoundingClientRect();
-            const mx = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
-            const my = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
-            if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) {
-                world[mx][my] = 1; // Поставить блок
-            }
-        });
+        canvas.addEventListener('click', placeBlock);
         canvas.addEventListener('contextmenu', e => {
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const mx = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
-            const my = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
-            if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) {
-                world[mx][my] = 0; // Удалить блок
-            }
+            removeBlock(e);
         });
 
-        // Игровой цикл
-        function gameLoop() {
-            // Очистка
-            ctx.fillStyle = '#87CEEB'; // Небо
+        function generateWorld() {
+            world = [];
+            for (let x = 0; x < WORLD_WIDTH; x++) {
+                world[x] = [];
+                // Поверхность с холмами
+                const height = Math.floor(35 + Math.sin(x * 0.05) * 5 + Math.sin(x * 0.1) * 2);
+                for (let y = 0; y < WORLD_HEIGHT; y++) {
+                    if (y > height) {
+                        world[x][y] = 1; // Земля
+                    } else if (y > height - 3) {
+                        world[x][y] = 2; // Трава
+                    } else {
+                        world[x][y] = 0; // Воздух
+                    }
+                }
+            }
+        }
+
+        function placeBlock(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mx = Math.floor((e.clientX - rect.left + camera.x) / BLOCK_SIZE);
+            const my = Math.floor((e.clientY - rect.top + camera.y) / BLOCK_SIZE);
+            if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) {
+                world[mx][my] = 1;
+            }
+        }
+
+        function removeBlock(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mx = Math.floor((e.clientX - rect.left + camera.x) / BLOCK_SIZE);
+            const my = Math.floor((e.clientY - rect.top + camera.y) / BLOCK_SIZE);
+            if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) {
+                world[mx][my] = 0;
+            }
+        }
+
+        function update() {
+            // Движение игрока
+            let movingX = 0, movingY = 0;
+            if (keys['a'] || keys['arrowleft']) movingX -= player.speed;
+            if (keys['d'] || keys['arrowright']) movingX += player.speed;
+            if (keys['w'] || keys['arrowup'] || keys[' ']) {
+                if (player.grounded) player.velY = -12;
+            }
+
+            // Гравитация и коллизии
+            player.velY += 0.8; // Гравитация
+            player.grounded = false;
+
+            // X движение
+            player.x += movingX;
+            if (player.x < 0) player.x = 0;
+            if (player.x > WORLD_WIDTH * BLOCK_SIZE - player.width) player.x = WORLD_WIDTH * BLOCK_SIZE - player.width;
+
+            // Y движение и коллизии
+            player.y += player.velY;
+            if (player.y > WORLD_HEIGHT * BLOCK_SIZE - player.height) {
+                player.y = WORLD_HEIGHT * BLOCK_SIZE - player.height;
+                player.velY = 0;
+                player.grounded = true;
+            }
+
+            // Камера следует за игроком
+            camera.x = player.x - canvas.width / 2 + player.width / 2;
+            camera.y = player.y - canvas.height / 2 + player.height / 2;
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x > WORLD_WIDTH * BLOCK_SIZE - canvas.width) camera.x = WORLD_WIDTH * BLOCK_SIZE - canvas.width;
+            if (camera.y > WORLD_HEIGHT * BLOCK_SIZE - canvas.height) camera.y = WORLD_HEIGHT * BLOCK_SIZE - canvas.height;
+        }
+
+        function render() {
+            // Небо
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#E0F6FF');
+            ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Движение игрока
-            if (keys['w'] && player.y > 0) player.y -= player.speed;
-            if (keys['s'] && player.y < canvas.height - player.height) player.y += player.speed;
-            if (keys['a'] && player.x > 0) player.x -= player.speed;
-            if (keys['d'] && player.x < canvas.width - player.width) player.x += player.speed;
+            // Мир
+            const startX = Math.max(0, Math.floor(camera.x / BLOCK_SIZE) - 1);
+            const endX = Math.min(WORLD_WIDTH, Math.floor((camera.x + canvas.width) / BLOCK_SIZE) + 1);
+            const startY = Math.max(0, Math.floor(camera.y / BLOCK_SIZE) - 1);
+            const endY = Math.min(WORLD_HEIGHT, Math.floor((camera.y + canvas.height) / BLOCK_SIZE) + 1);
 
-            // Отрисовка мира (только видимая часть)
-            const offsetX = Math.floor(player.x / BLOCK_SIZE) - 10;
-            const offsetY = Math.floor(player.y / BLOCK_SIZE) - 8;
-            for (let x = Math.max(0, offsetX); x < Math.min(WORLD_WIDTH, offsetX + 40); x++) {
-                for (let y = Math.max(0, offsetY); y < Math.min(WORLD_HEIGHT, offsetY + 25); y++) {
-                    const screenX = x * BLOCK_SIZE - player.x + canvas.width / 2 - player.width / 2;
-                    const screenY = y * BLOCK_SIZE - player.y + canvas.height / 2 - player.height / 2;
-                    if (world[x][y] === 1) {
-                        ctx.fillStyle = '#8B4513'; // Земля
-                        ctx.fillRect(screenX, screenY, BLOCK_SIZE, BLOCK_SIZE);
-                        ctx.fillStyle = '#228B22'; // Трава сверху
-                        ctx.fillRect(screenX, screenY, BLOCK_SIZE, 4);
+            for (let x = startX; x < endX; x++) {
+                for (let y = startY; y < endY; y++) {
+                    if (world[x] && world[x][y]) {
+                        const screenX = x * BLOCK_SIZE - camera.x;
+                        const screenY = y * BLOCK_SIZE - camera.y;
+                        
+                        if (world[x][y] === 1) {
+                            ctx.fillStyle = '#8B4513'; // Земля
+                            ctx.fillRect(screenX, screenY, BLOCK_SIZE, BLOCK_SIZE);
+                        } else if (world[x][y] === 2) {
+                            ctx.fillStyle = '#228B22'; // Трава
+                            ctx.fillRect(screenX, screenY, BLOCK_SIZE, BLOCK_SIZE);
+                            ctx.fillStyle = '#4A7C59'; // Тени
+                            ctx.fillRect(screenX + 2, screenY + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
+                        }
                     }
                 }
             }
 
             // Игрок
+            const px = player.x - camera.x;
+            const py = player.y - camera.y;
             ctx.fillStyle = '#FFDBAC';
-            ctx.fillRect(player.x - player.width / 2 + canvas.width / 2, player.y - player.height / 2 + canvas.height / 2, player.width, player.height);
+            ctx.fillRect(px, py, player.width, player.height);
+            ctx.fillStyle = '#FF8C42'; // Одежда
+            ctx.fillRect(px + 4, py + player.height * 0.3, player.width - 8, player.height * 0.4);
             ctx.fillStyle = '#000';
-            ctx.fillRect(player.x - player.width / 4 + canvas.width / 2, player.y - player.height / 4 + canvas.height / 2, 4, 4); // Глаз
+            ctx.fillRect(px + 8, py + 8, 6, 6); // Глаз
+            ctx.fillRect(px + player.width - 14, py + 8, 6, 6); // Глаз
 
+            // Сетка для выделения блоков под курсором
+            const rect = canvas.getBoundingClientRect();
+            const mx = Math.floor((canvas.width / 2 + (event ? event.clientX - rect.left : 0) - camera.x) / BLOCK_SIZE);
+            const my = Math.floor((canvas.height / 2 + (event ? event.clientY - rect.top : 0) - camera.y) / BLOCK_SIZE);
+            if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(mx * BLOCK_SIZE - camera.x, my * BLOCK_SIZE - camera.y, BLOCK_SIZE, BLOCK_SIZE);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            render();
             requestAnimationFrame(gameLoop);
         }
 
+        // Старт
+        generateWorld();
         gameLoop();
     </script>
 </body>
