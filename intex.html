@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Minecraft</title>
+    <style>
+        body { margin: 0; background: #87CEEB; font-family: monospace; }
+        canvas { border: 2px solid #333; display: block; margin: 0 auto; image-rendering: pixelated; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.7); padding: 10px; }
+    </style>
+</head>
+<body>
+    <canvas id="game" width="800" height="600"></canvas>
+    <div id="info">
+        WASD: движение | ЛКМ: блок | ПКМ: копать | Блоки: земля/воздух
+    </div>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        // Размер блока и мир
+        const BLOCK_SIZE = 32;
+        const WORLD_WIDTH = 50;
+        const WORLD_HEIGHT = 30;
+        const world = [];
+
+        // Инициализация мира (земля снизу, небо сверху)
+        for (let x = 0; x < WORLD_WIDTH; x++) {
+            world[x] = [];
+            for (let y = 0; y < WORLD_HEIGHT; y++) {
+                world[x][y] = y > WORLD_HEIGHT - 8 ? 1 : 0; // 1=земля, 0=воздух
+            }
+        }
+
+        // Игрок
+        const player = { x: 25 * BLOCK_SIZE, y: 10 * BLOCK_SIZE, width: BLOCK_SIZE, height: BLOCK_SIZE * 2, speed: 3 };
+
+        // Клавиши
+        const keys = {};
+        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+        // Мышь
+        canvas.addEventListener('click', e => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
+            const my = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
+            if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) {
+                world[mx][my] = 1; // Поставить блок
+            }
+        });
+        canvas.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mx = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
+            const my = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
+            if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) {
+                world[mx][my] = 0; // Удалить блок
+            }
+        });
+
+        // Игровой цикл
+        function gameLoop() {
+            // Очистка
+            ctx.fillStyle = '#87CEEB'; // Небо
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Движение игрока
+            if (keys['w'] && player.y > 0) player.y -= player.speed;
+            if (keys['s'] && player.y < canvas.height - player.height) player.y += player.speed;
+            if (keys['a'] && player.x > 0) player.x -= player.speed;
+            if (keys['d'] && player.x < canvas.width - player.width) player.x += player.speed;
+
+            // Отрисовка мира (только видимая часть)
+            const offsetX = Math.floor(player.x / BLOCK_SIZE) - 10;
+            const offsetY = Math.floor(player.y / BLOCK_SIZE) - 8;
+            for (let x = Math.max(0, offsetX); x < Math.min(WORLD_WIDTH, offsetX + 40); x++) {
+                for (let y = Math.max(0, offsetY); y < Math.min(WORLD_HEIGHT, offsetY + 25); y++) {
+                    const screenX = x * BLOCK_SIZE - player.x + canvas.width / 2 - player.width / 2;
+                    const screenY = y * BLOCK_SIZE - player.y + canvas.height / 2 - player.height / 2;
+                    if (world[x][y] === 1) {
+                        ctx.fillStyle = '#8B4513'; // Земля
+                        ctx.fillRect(screenX, screenY, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.fillStyle = '#228B22'; // Трава сверху
+                        ctx.fillRect(screenX, screenY, BLOCK_SIZE, 4);
+                    }
+                }
+            }
+
+            // Игрок
+            ctx.fillStyle = '#FFDBAC';
+            ctx.fillRect(player.x - player.width / 2 + canvas.width / 2, player.y - player.height / 2 + canvas.height / 2, player.width, player.height);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(player.x - player.width / 4 + canvas.width / 2, player.y - player.height / 4 + canvas.height / 2, 4, 4); // Глаз
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
